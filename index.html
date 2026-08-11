@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLAD Notes · Registro de clases</title>
+<meta name="description" content="PWA para docentes: registra grado, lección, actividad, fecha y notas de cada clase.">
+<meta name="theme-color" content="#12a7c6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Caveat:wght@500;700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#243830; --ink-soft:#5b6f66; --paper:#fffdf7; --line:#e0e7db;
+    --board:#1f4b3f; --board-dark:#153830; --chalk:#f1f6ef;
+    --wood1:#b5793f; --wood2:#8a5a2e;
+    --green:#2f8f63; --green-dark:#1f6b48;
+  }
+  *{box-sizing:border-box; margin:0}
+  [hidden]{display:none!important}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Karla',system-ui,sans-serif; color:var(--ink); min-height:100vh;
+    background:
+      linear-gradient(rgba(47,111,90,.10) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, rgba(47,111,90,.10) 1.5px, transparent 1.5px),
+      linear-gradient(rgba(47,111,90,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(47,111,90,.05) 1px, transparent 1px),
+      #f4f7f3;
+    background-size:110px 110px,110px 110px,22px 22px,22px 22px;
+  }
+  .wrap{max-width:1160px; margin:0 auto; padding:0 18px}
+
+  /* ══════════ PIZARRÓN ══════════ */
+  .frame{margin-top:22px; padding:12px 12px 10px; border-radius:18px;
+    background:linear-gradient(135deg,var(--wood1),var(--wood2));
+    box-shadow:0 12px 26px rgba(30,50,40,.20), inset 0 2px 3px rgba(255,255,255,.28);}
+  .board{position:relative; border-radius:10px; padding:30px 30px 36px; overflow:hidden;
+    background:radial-gradient(130% 150% at 18% 8%, #2c5f50 0%, var(--board) 48%, var(--board-dark) 100%);
+    box-shadow:inset 0 0 60px rgba(0,0,0,.38);
+    display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap;}
+  .board::after{content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(40% 30% at 70% 80%, rgba(255,255,255,.05), transparent 70%);}
+  .chalk-title{font-family:'Baloo 2',cursive; font-weight:800; color:var(--chalk);
+    font-size:clamp(2.2rem,5.2vw,3.4rem); line-height:1; letter-spacing:.5px;
+    text-shadow:0 0 6px rgba(241,246,239,.25);}
+  .chalk-sub{font-family:'Caveat',cursive; font-size:1.55rem; color:#ffd76a; margin-top:4px; transform:rotate(-1deg)}
+  .squiggle{display:block; margin-top:6px}
+  .squiggle path{stroke-dasharray:1; stroke-dashoffset:1; animation:draw 1.1s .3s ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .board-side{text-align:right; position:relative; z-index:2}
+  .board-date{font-family:'Caveat',cursive; font-size:1.6rem; color:var(--chalk); transform:rotate(1.5deg)}
+  .board-count{color:rgba(241,246,239,.75); font-size:.85rem; margin-top:6px}
+  .board-count b{font-family:'Baloo 2'; font-size:1.15rem; color:#ffd76a}
+  .install{margin-top:12px; font-family:'Baloo 2'; font-weight:700; font-size:.9rem; cursor:pointer;
+    color:var(--chalk); background:transparent; border:2px dashed rgba(241,246,239,.6);
+    padding:7px 16px; border-radius:999px; transition:.2s}
+  .install:hover{background:rgba(241,246,239,.12); transform:translateY(-2px)}
+  .doodle{position:absolute; color:rgba(241,246,239,.7); pointer-events:none; animation:float 6s ease-in-out infinite alternate}
+  .d-star{right:36%; top:16px; animation-delay:.8s}
+  .d-sun{left:44%; bottom:14px; animation-delay:1.6s}
+  @keyframes float{from{transform:translateY(0) rotate(-3deg)} to{transform:translateY(-7px) rotate(4deg)}}
+  .tray{position:relative; margin-top:10px; height:24px; border-radius:6px;
+    background:linear-gradient(#8a5a2e,#6f4522); box-shadow:inset 0 3px 5px rgba(0,0,0,.35);}
+  .chalk-piece{position:absolute; top:5px; width:46px; height:9px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  .cp1{left:26px; background:#fff; transform:rotate(-2deg)}
+  .cp2{left:84px; background:#f6b8c6; transform:rotate(3deg)}
+  .cp3{left:132px; background:#ffe08a; transform:rotate(-1deg)}
+  .eraser{position:absolute; right:30px; top:2px; width:64px; height:15px; border-radius:3px;
+    background:#2f3c46; border-top:5px solid #d9cdb0; box-shadow:0 2px 3px rgba(0,0,0,.4)}
+
+  /* ══════════ LAYOUT ══════════ */
+  main{display:grid; grid-template-columns:410px 1fr; gap:26px; margin:26px auto 0; align-items:start}
+  @media(max-width:980px){ main{grid-template-columns:1fr} .planner{position:static!important} }
+
+  /* ══════════ PLANEADOR ══════════ */
+  .planner{background:var(--paper); border:1px solid var(--line); border-top:7px solid var(--accent,var(--green));
+    border-radius:14px; padding:22px 22px 24px; box-shadow:0 8px 20px rgba(35,60,50,.09);
+    transition:border-color .35s; position:sticky; top:16px;}
+  .planner-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:16px}
+  .planner-head h2{font-family:'Baloo 2'; font-size:1.5rem; font-weight:800}
+  .hand{font-family:'Caveat'; font-size:1.3rem; color:var(--ink-soft); transform:rotate(-2deg)}
+  .edit-banner{background:#fff6db; border:1.5px dashed #e0a10a; border-radius:10px;
+    padding:8px 12px; font-size:.88rem; margin-bottom:14px; display:flex; gap:8px; align-items:center; justify-content:space-between}
+  .link{background:none; border:none; color:#a06e00; font-weight:700; cursor:pointer; text-decoration:underline; font-family:inherit}
+
+  .fld{margin-bottom:16px}
+  .lbl{display:flex; align-items:center; gap:8px; font-weight:700; font-size:.82rem;
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; color:var(--ink)}
+  .lbl small{font-weight:500; text-transform:none; letter-spacing:0; color:var(--ink-soft)}
+  .num{width:22px; height:22px; flex:none; display:grid; place-items:center; border-radius:50%;
+    background:var(--ink); color:#fff; font-family:'Baloo 2'; font-size:.8rem}
+  input[type=text], input[type=date], textarea{
+    width:100%; font-family:'Karla'; font-size:1rem; color:var(--ink);
+    background:#fffef9; border:2px solid var(--line); border-radius:10px; padding:10px 12px;
+    transition:border-color .2s, box-shadow .2s;}
+  input:focus, textarea:focus{outline:none; border-color:var(--green); box-shadow:0 0 0 4px rgba(47,143,99,.14)}
+  .invalid{border-color:#e5484d!important; animation:shake .3s}
+  @keyframes shake{25%{transform:translateX(-4px)} 75%{transform:translateX(4px)}}
+  .err{color:#c8342f; font-size:.8rem; margin-top:5px}
+  .date-hint{display:block; font-family:'Caveat'; font-size:1.15rem; color:var(--ink-soft); margin-top:4px}
+
+  textarea{resize:vertical; min-height:138px; line-height:30px; padding:6px 14px 10px 52px;
+    background-image:
+      linear-gradient(90deg, transparent 0 40px, rgba(229,72,77,.35) 40px 42px, transparent 42px),
+      repeating-linear-gradient(to bottom, transparent 0 29px, rgba(90,130,160,.30) 29px 30px);
+    background-attachment:local, local;}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .gchip{display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+    font-family:'Baloo 2'; font-weight:700; font-size:.95rem; color:var(--ink);
+    background:#fff; border:2px solid var(--line); border-radius:999px; padding:7px 14px;
+    transition:transform .15s, background .2s, border-color .2s, box-shadow .2s;}
+  .gchip .dot{width:11px; height:11px; border-radius:50%; background:var(--c)}
+  .gchip:hover{transform:translateY(-2px); border-color:var(--c); box-shadow:0 4px 10px rgba(35,60,50,.12)}
+  .gchip.sel{background:var(--c); color:var(--t); border-color:transparent; transform:scale(1.06); animation:pop .25s}
+  .gchip.sel .dot{background:rgba(255,255,255,.85); box-shadow:0 0 0 2px rgba(0,0,0,.08)}
+  @keyframes pop{50%{transform:scale(1.14)}}
+
+  .btn-row{display:flex; gap:12px; margin-top:20px; flex-wrap:wrap}
+  .btn-save{font-family:'Baloo 2'; font-weight:700; font-size:1.05rem; cursor:pointer;
+    color:#fff; background:var(--green); border:none; border-radius:12px; padding:13px 26px;
+    box-shadow:0 5px 0 var(--green-dark); transition:transform .1s, box-shadow .1s, background .25s; flex:1}
+  .btn-save:hover{filter:brightness(1.05)}
+  .btn-save:active{transform:translateY(4px); box-shadow:0 1px 0 var(--green-dark)}
+  .btn-save.ok{background:#1f6b48}
+  .btn-ghost{font-family:'Baloo 2'; font-weight:700; cursor:pointer; color:var(--ink-soft);
+    background:transparent; border:2px solid var(--line); border-radius:12px; padding:11px 18px; transition:.2s}
+  .btn-ghost:hover{border-color:var(--ink-soft); color:var(--ink)}
+
+  /* ══════════ BITÁCORA ══════════ */
+  .log-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+  .log-head h2{font-family:'Baloo 2'; font-size:1.6rem; font-weight:800}
+  .count-pill{font-family:'Baloo 2'; font-size:.85rem; background:var(--ink); color:#fff; border-radius:999px; padding:3px 12px}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 12px}
+  .search{position:relative; flex:1; min-width:180px}
+  .search svg{position:absolute; left:11px; top:50%; translate:0 -50%; width:16px; height:16px; color:var(--ink-soft)}
+  .search input{padding-left:34px}
+  .tbtn{display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-family:'Baloo 2'; font-weight:700;
+    font-size:.9rem; color:var(--ink); background:#fff; border:2px solid var(--line); border-radius:10px; padding:9px 14px; transition:.2s}
+  .tbtn:hover{border-color:var(--green); color:var(--green); transform:translateY(-2px)}
+  .tbtn svg{width:15px; height:15px}
+  .filter-row{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:18px}
+  .fchip{cursor:pointer; user-select:none; font-family:'Baloo 2'; font-weight:700; font-size:.82rem;
+    background:#fff; border:1.5px solid var(--line); border-radius:999px; padding:5px 12px; color:var(--ink);
+    display:inline-flex; gap:6px; align-items:center; transition:.18s}
+  .fchip i{font-style:normal; font-size:.72rem; background:rgba(36,56,48,.09); border-radius:999px; padding:1px 7px}
+  .fchip:hover{transform:translateY(-2px); border-color:var(--c)}
+  .fchip.sel{background:var(--c); color:var(--t); border-color:transparent}
+  .fchip.sel i{background:rgba(255,255,255,.28)}
+
+  .group-h{display:flex; align-items:center; gap:12px; margin:20px 0 12px;
+    font-weight:700; font-size:.8rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft)}
+  .group-h i{flex:1; height:2px; background:repeating-linear-gradient(90deg,var(--line) 0 8px, transparent 8px 14px)}
+  .group-cards{display:grid; gap:16px}
+
+  .card{position:relative; background:var(--paper); border:1px solid var(--line); border-left:6px solid var(--gc);
+    border-radius:10px; padding:16px 18px 14px; box-shadow:0 3px 10px rgba(35,60,50,.10);
+    animation:cardIn .45s ease both; transition:transform .2s, box-shadow .2s, opacity .25s;}
+  .card:hover{transform:translateY(-4px) rotate(-.35deg); box-shadow:0 10px 22px rgba(35,60,50,.16)}
+  .card.out{opacity:0; transform:translateX(30px)}
+  @keyframes cardIn{from{opacity:0; transform:translateY(14px) scale(.98)}}
+  .tape{position:absolute; top:-10px; left:26px; width:92px; height:21px; background:var(--gc);
+    opacity:.55; transform:rotate(-3deg); border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .card-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:9px}
+  .gbadge{font-family:'Baloo 2'; font-weight:700; font-size:.82rem; background:var(--gc); color:var(--gi);
+    border-radius:999px; padding:3px 12px}
+  .lesson-chip{font-size:.83rem; font-weight:600; color:#44554d; background:#f4f7ef;
+    border:1.5px dashed #b9c4ae; border-radius:8px; padding:3px 10px}
+  .card-actions{margin-left:auto; display:flex; gap:4px; opacity:.45; transition:opacity .2s}
+  .card:hover .card-actions{opacity:1}
+  @media(hover:none){.card-actions{opacity:.85}}
+  .ibtn{cursor:pointer; width:32px; height:32px; display:grid; place-items:center; border:none;
+    background:transparent; border-radius:8px; color:var(--ink-soft); transition:.15s}
+  .ibtn:hover{background:rgba(36,56,48,.08); color:var(--ink); transform:scale(1.1)}
+  .ibtn svg{width:16px; height:16px}
+  .ibtn.armed{width:auto; padding:0 10px; background:#e5484d; color:#fff; font-family:'Baloo 2'; font-size:.8rem}
+  .card .act{font-size:1.06rem; font-weight:700; margin-bottom:6px}
+  .card .notes{font-size:.94rem; line-height:1.5; color:#3c4f46; white-space:normal}
+  .nonotes{color:#9aa89f}
+  .card-meta{margin-top:10px; font-size:.76rem; color:var(--ink-soft)}
+
+  .empty{text-align:center; padding:52px 20px; animation:cardIn .5s ease both}
+  .empty svg{color:#a9b8ac; margin-bottom:10px}
+  .empty p{font-family:'Caveat'; font-size:1.7rem; color:var(--ink-soft)}
+  .empty span{font-size:.92rem; color:#8b9a90}
+
+  .print-head{display:none}
+  footer{margin:36px auto 40px; text-align:center; font-size:.82rem; color:var(--ink-soft)}
+  footer b{font-family:'Baloo 2'}
+
+  .toast{position:fixed; left:50%; bottom:26px; translate:-50% 20px; z-index:50; opacity:0; pointer-events:none;
+    background:var(--board-dark); color:var(--chalk); font-family:'Baloo 2'; font-size:.98rem;
+    padding:12px 22px; border-radius:12px; box-shadow:0 10px 26px rgba(0,0,0,.28); transition:.3s}
+  .toast.show{opacity:1; translate:-50% 0}
+
+  @media print{
+    body{background:#fff}
+    .frame,.planner,.toolbar,.filter-row,.toast,footer,.card-actions,.tape{display:none!important}
+    main{display:block}
+    .card{box-shadow:none; break-inside:avoid; margin-bottom:12px}
+    .print-head{display:block; font-family:'Baloo 2'; font-size:1.3rem; margin-bottom:14px;
+      border-bottom:3px solid var(--ink); padding-bottom:8px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important; transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="frame">
+    <header class="board">
+      <svg class="doodle d-star" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2l2.9 6.6 7.1.7-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.3l7.1-.7z"/></svg>
+      <svg class="doodle d-sun" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
+      <div>
+        <h1 class="chalk-title">GLAD Notes</h1>
+        <svg class="squiggle" width="230" height="16" viewBox="0 0 230 16"><path pathLength="1" d="M3 10 C 20 2, 38 14, 55 8 S 90 3, 107 9 S 142 14, 159 7 S 196 3, 227 9" fill="none" stroke="#ffd76a" stroke-width="4" stroke-linecap="round"/></svg>
+        <p class="chalk-sub">bitácora del docente · Kinder a 6°</p>
+      </div>
+      <div class="board-side">
+        <div class="board-date" id="todayChalk"></div>
+        <div class="board-count"><b id="totalCount">0</b> clases en tu bitácora</div>
+        <button class="install" id="installBtn" hidden>⤓ Instalar app</button>
+      </div>
+    </header>
+    <div class="tray" aria-hidden="true">
+      <span class="chalk-piece cp1"></span><span class="chalk-piece cp2"></span><span class="chalk-piece cp3"></span><span class="eraser"></span>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <!-- ══ FORMULARIO ══ -->
+  <section class="planner" id="planner">
+    <div class="planner-head">
+      <h2>Planea tu clase</h2>
+      <span class="hand">paso a paso ✎</span>
+    </div>
+    <div class="edit-banner" id="editBanner" hidden>
+      <span>✏️ Estás editando un registro</span>
+      <button type="button" class="link" id="cancelEdit">cancelar</button>
+    </div>
+    <form id="form" novalidate>
+      <div class="fld">
+        <span class="lbl"><span class="num">1</span> Grade <small>· selecciona el grado</small></span>
+        <div class="chips" id="gradeChips" role="radiogroup" aria-label="Grado"></div>
+        <p class="err" id="errGrade" hidden>Elige un grado para continuar</p>
+      </div>
+      <div class="fld">
+        <label class="lbl" for="lesson"><span class="num">2</span> Lesson <small>· lección</small></label>
+        <input id="lesson" type="text" autocomplete="off" placeholder="Unit 4 · Lesson 2: Animals">
+      </div>
+      <div class="fld">
+        <label class="lbl" for="activity"><span class="num">3</span> Activity <small>· actividad</small></label>
+        <input id="activity" type="text" autocomplete="off" placeholder="Flashcards + canción + juego en parejas">
+      </div>
+      <div class="fld">
+        <label class="lbl" for="date"><span class="num">4</span> Date <small>· fecha</small></label>
+        <input id="date" type="date">
+        <span class="date-hint" id="dateHint"></span>
+      </div>
+      <div class="fld">
+        <label class="lbl" for="notes"><span class="num">5</span> Notes <small>· describe la(s) actividad(es)</small></label>
+        <textarea id="notes" rows="5" placeholder="Inicio: saludo y warm-up…  Desarrollo: …  Cierre: …"></textarea>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn-save" id="saveBtn">Guardar registro</button>
+        <button type="button" class="btn-ghost" id="clearBtn">Limpiar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ══ REGISTROS ══ -->
+  <section>
+    <div class="print-head">GLAD Notes — Registro de clases · Kinder a 6°</div>
+    <div class="log-head">
+      <h2>Bitácora</h2>
+      <span class="count-pill" id="countPill">0 registros</span>
+    </div>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="search" type="text" placeholder="Buscar por lección, actividad o nota…">
+      </div>
+      <button class="tbtn" id="csvBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>CSV</button>
+      <button class="tbtn" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4V9h16v9h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Imprimir</button>
+    </div>
+    <div class="filter-row" id="filterRow"></div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<footer class="wrap"><b>GLAD Notes</b> · Tus registros se guardan en este dispositivo y la app funciona sin conexión ✏️</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ─────────── Datos base ─────────── */
+const GRADES = [
+  {id:'K', label:'Kinder', color:'#e5484d', ink:'#ffffff'},
+  {id:'1', label:'1°', color:'#ef7d1a', ink:'#ffffff'},
+  {id:'2', label:'2°', color:'#d99a06', ink:'#ffffff'},
+  {id:'3', label:'3°', color:'#3f9e4d', ink:'#ffffff'},
+  {id:'4', label:'4°', color:'#1fa7a0', ink:'#ffffff'},
+  {id:'5', label:'5°', color:'#3568e0', ink:'#ffffff'},
+  {id:'6', label:'6°', color:'#8f5fd6', ink:'#ffffff'},
+];
+const gById = id => GRADES.find(g=>g.id===id);
+const gLabel = id => id==='K' ? 'Kinder' : id+'°';
+const KEY = 'classlog.entries.v1';
+
+let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, toastTimer;
+
+/* ─────────── Utilidades ─────────── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(16).slice(2));
+const todayISO = () => { const t=new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; };
+const parseISO = d => { const [y,m,dd]=d.split('-').map(Number); return new Date(y,m-1,dd); };
+const fmtLong = d => parseISO(d).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const fmtShort = ts => { const d=new Date(ts); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'}) + ' · ' + d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(entries)); }catch(e){} }
+function load(){ try{ entries = JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ entries=[]; } }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2400); }
+
+const IC = {
+  pencil:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/></svg>'
+};
+
+/* ─────────── Chips de grado (formulario) ─────────── */
+const chipsEl = $('gradeChips');
+GRADES.forEach(g=>{
+  const b=document.createElement('button');
+  b.type='button'; b.className='gchip'; b.dataset.g=g.id;
+  b.style.setProperty('--c',g.color); b.style.setProperty('--t',g.ink);
+  b.innerHTML=`<i class="dot"></i>${g.label}`;
+  b.addEventListener('click',()=>selectGrade(g.id));
+  chipsEl.appendChild(b);
+});
+function selectGrade(id){
+  selectedGrade=id;
+  chipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.toggle('sel', c.dataset.g===id));
+  $('planner').style.setProperty('--accent', gById(id).color);
+  $('errGrade').hidden=true;
+}
+
+/* ─────────── Render ─────────── */
+function renderFilter(){
+  const counts={}; entries.forEach(e=>counts[e.grade]=(counts[e.grade]||0)+1);
+  let html=`<button class="fchip ${filter==='all'?'sel':''}" data-f="all" style="--c:#243830;--t:#fff">Todos <i>${entries.length}</i></button>`;
+  GRADES.forEach(g=>{ html+=`<button class="fchip ${filter===g.id?'sel':''}" data-f="${g.id}" style="--c:${g.color};--t:${g.ink}">${g.label} <i>${counts[g.id]||0}</i></button>`; });
+  $('filterRow').innerHTML=html;
+}
+$('filterRow').addEventListener('click', e=>{
+  const b=e.target.closest('[data-f]'); if(!b) return;
+  filter=b.dataset.f; renderFilter(); renderList();
+});
+
+function cardHTML(e, idx){
+  const g=gById(e.grade);
+  const notes = e.notes ? esc(e.notes).replace(/\n/g,'<br>') : '<em class="nonotes">Sin notas adicionales</em>';
+  return `<article class="card" style="--gc:${g.color};--gi:${g.ink};animation-delay:${Math.min(idx*45,400)}ms" data-id="${e.id}">
+    <span class="tape"></span>
+    <div class="card-top">
+      <span class="gbadge">${gLabel(e.grade)}</span>
+      <span class="lesson-chip">📖 ${esc(e.lesson)}</span>
+      <div class="card-actions">
+        <button class="ibtn" data-act="edit" title="Editar" aria-label="Editar">${IC.pencil}</button>
+        <button class="ibtn" data-act="del" title="Borrar" aria-label="Borrar">${IC.trash}</button>
+      </div>
+    </div>
+    <h3 class="act">${esc(e.activity)}</h3>
+    <p class="notes">${notes}</p>
+    <div class="card-meta">Guardado ${fmtShort(e.createdAt)}${e.updatedAt?' · ✏️ editado':''}</div>
+  </article>`;
+}
+
+function renderList(){
+  const q=query.trim().toLowerCase();
+  let items=entries.filter(e =>
+    (filter==='all' || e.grade===filter) &&
+    (!q || [e.lesson,e.activity,e.notes].join(' ').toLowerCase().includes(q)));
+  items.sort((a,b)=> a.date===b.date ? b.createdAt-a.createdAt : (a.date<b.date?1:-1));
+
+  $('totalCount').textContent=entries.length;
+  $('countPill').textContent=`${entries.length} ${entries.length===1?'registro':'registros'}`;
+
+  if(!items.length){
+    const msg = (q||filter!=='all')
+      ? ['Nada coincide con tu búsqueda…','Prueba con otro término o quita los filtros.']
+      : ['Todavía no hay clases registradas…','Elige un grado, completa la planeación y presiona «Guardar registro».'];
+    $('list').innerHTML=`<div class="empty">
+      <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/><path d="M14 6l4 4"/></svg>
+      <p>${msg[0]}</p><span>${msg[1]}</span></div>`;
+    return;
+  }
+  let html='', last=null, idx=0;
+  for(const e of items){
+    if(e.date!==last){ if(last!==null) html+='</div>'; html+=`<div class="group"><div class="group-h"><span>${cap(fmtLong(e.date))}</span><i></i></div><div class="group-cards">`; last=e.date; }
+    html+=cardHTML(e, idx++);
+  }
+  $('list').innerHTML=html+'</div></div>';
+}
+
+function renderAll(){ renderFilter(); renderList(); }
+
+/* ─────────── Acciones sobre tarjetas ─────────── */
+$('list').addEventListener('click', e=>{
+  const btn=e.target.closest('[data-act]'); if(!btn) return;
+  const card=btn.closest('.card'), id=card.dataset.id;
+  if(btn.dataset.act==='edit'){ startEdit(id); }
+  else{
+    if(btn.dataset.armed){
+      card.classList.add('out');
+      setTimeout(()=>{ entries=entries.filter(x=>x.id!==id); persist(); renderAll(); toast('Registro eliminado 🗑'); },230);
+    }else{
+      btn.dataset.armed='1'; btn.classList.add('armed'); btn.textContent='¿Seguro?';
+      setTimeout(()=>{ if(document.contains(btn)){ delete btn.dataset.armed; btn.classList.remove('armed'); btn.innerHTML=IC.trash; } },2200);
+    }
+  }
+});
+
+function startEdit(id){
+  const e=entries.find(x=>x.id===id); if(!e) return;
+  editingId=id;
+  selectGrade(e.grade);
+  $('lesson').value=e.lesson; $('activity').value=e.activity;
+  $('date').value=e.date; $('notes').value=e.notes||'';
+  updateDateHint();
+  $('editBanner').hidden=false;
+  $('saveBtn').textContent='Actualizar registro';
+  $('planner').scrollIntoView({behavior:'smooth', block:'start'});
+  $('lesson').focus();
+}
+
+function resetForm(keepGradeDate){
+  editingId=null;
+  if(!keepGradeDate){ selectedGrade=null; chipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.remove('sel')); $('planner').style.removeProperty('--accent'); $('date').value=todayISO(); }
+  $('lesson').value=''; $('activity').value=''; $('notes').value='';
+  $('editBanner').hidden=true; $('saveBtn').textContent='Guardar registro';
+  updateDateHint();
+}
+
+/* ─────────── Guardar ─────────── */
+$('form').addEventListener('submit', e=>{
+  e.preventDefault();
+  const lesson=$('lesson').value.trim(), activity=$('activity').value.trim(), date=$('date').value;
+  let bad=false;
+  const flag=(el,cond)=>{ el.classList.toggle('invalid',cond); if(cond) bad=true; };
+  flag($('lesson'),!lesson); flag($('activity'),!activity); flag($('date'),!date);
+  $('errGrade').hidden=!!selectedGrade;
+  if(!selectedGrade) bad=true;
+  if(bad){ toast('Completa grado, lección, actividad y fecha ✍️'); return; }
+
+  if(editingId){
+    const i=entries.findIndex(x=>x.id===editingId);
+    entries[i]={...entries[i], grade:selectedGrade, lesson, activity, date, notes:$('notes').value.trim(), updatedAt:Date.now()};
+    toast('Registro actualizado ✓'); resetForm(false);
+  }else{
+    entries.push({ id:uid(), grade:selectedGrade, lesson, activity, date, notes:$('notes').value.trim(), createdAt:Date.now() });
+    toast('Registro guardado ✓'); resetForm(true); $('lesson').focus();
+  }
+  persist(); renderAll();
+  const b=$('saveBtn'); b.classList.add('ok'); setTimeout(()=>b.classList.remove('ok'),900);
+});
+['lesson','activity','date','notes'].forEach(id=>$(id).addEventListener('input', e=>e.target.classList.remove('invalid')));
+$('clearBtn').addEventListener('click', ()=>{ resetForm(false); toast('Formulario limpio'); });
+$('cancelEdit').addEventListener('click', ()=>resetForm(false));
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && editingId) resetForm(false); });
+
+/* ─────────── Fecha ─────────── */
+function updateDateHint(){ const v=$('date').value; $('dateHint').textContent = v ? cap(fmtLong(v)) : ''; }
+$('date').addEventListener('change', updateDateHint);
+
+/* ─────────── Búsqueda / exportar / imprimir ─────────── */
+let deb; $('search').addEventListener('input', e=>{ clearTimeout(deb); deb=setTimeout(()=>{ query=e.target.value; renderList(); },130); });
+
+$('csvBtn').addEventListener('click', ()=>{
+  if(!entries.length){ toast('No hay registros para exportar'); return; }
+  const rows=[['Grade','Lesson','Activity','Date','Notes'],
+    ...[...entries].sort((a,b)=>a.date<b.date?-1:1).map(e=>[gLabel(e.grade), e.lesson, e.activity, e.date, e.notes||''])];
+  const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='glad-notes.csv'; a.click(); URL.revokeObjectURL(a.href);
+  toast('CSV descargado 📄');
+});
+$('printBtn').addEventListener('click', ()=>window.print());
+
+/* ─────────── Instalación PWA ─────────── */
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt=e; $('installBtn').hidden=false; });
+$('installBtn').addEventListener('click', async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice;
+  deferredPrompt=null; $('installBtn').hidden=true;
+});
+
+/* ─────────── Init ─────────── */
+load();
+$('date').value=todayISO();
+$('todayChalk').textContent = cap(new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}));
+updateDateHint();
+renderAll();
+
+if('serviceWorker' in navigator && (location.protocol==='https:' || ['localhost','127.0.0.1'].includes(location.hostname))){
+  window.addEventListener('load', ()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
