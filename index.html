@@ -88,6 +88,14 @@
   .edit-banner{background:#fff6db; border:1.5px dashed #e0a10a; border-radius:10px;
     padding:8px 12px; font-size:.88rem; margin-bottom:14px; display:flex; gap:8px; align-items:center; justify-content:space-between}
   .link{background:none; border:none; color:#a06e00; font-weight:700; cursor:pointer; text-decoration:underline; font-family:inherit}
+  .import-btn{width:100%; margin-bottom:14px; font-size:.85rem; padding:9px 14px; justify-content:center; display:flex; align-items:center; gap:7px}
+  .import-banner{background:#e6f3ee; border-color:#2f8f63; flex-direction:column; align-items:stretch; gap:10px}
+  .import-banner .row1{display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .import-banner .row2{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .import-banner select{flex:1; min-width:140px; padding:8px 10px; border-radius:8px; border:2px solid var(--line); font-family:'Karla'; font-size:.92rem; background:#fffef9}
+  .import-banner .btn-ghost{padding:8px 16px; font-size:.85rem; white-space:nowrap}
+  .stage-badge{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:var(--sc,#334155); color:#fff;
+    border-radius:999px; padding:3px 11px; display:inline-flex; align-items:center; gap:4px}
 
   .fld{margin-bottom:16px}
   .lbl{display:flex; align-items:center; gap:8px; font-weight:700; font-size:.82rem;
@@ -243,9 +251,22 @@
       <h2>Planea tu clase</h2>
       <span class="hand">paso a paso ✎</span>
     </div>
+    <button type="button" class="btn-ghost import-btn" id="importBtn">📥 Importar desde AoA Stage Weaver</button>
+    <input type="file" id="importFile" accept=".html,text/html" hidden>
     <div class="edit-banner" id="editBanner" hidden>
       <span>✏️ Estás editando un registro</span>
       <button type="button" class="link" id="cancelEdit">cancelar</button>
+    </div>
+    <div class="edit-banner import-banner" id="importBanner" hidden>
+      <div class="row1">
+        <span>📥 Importado: <b id="importTitle"></b></span>
+        <button type="button" class="link" id="cancelImport">cancelar</button>
+      </div>
+      <div class="row2">
+        <label for="importSkill" style="font-weight:700; font-size:.85rem; white-space:nowrap">Destreza:</label>
+        <select id="importSkill"></select>
+        <button type="button" class="btn-ghost" id="applyImport">Usar esta destreza →</button>
+      </div>
     </div>
     <form id="form" novalidate>
       <div class="fld">
@@ -270,6 +291,10 @@
         <label class="lbl" for="notes"><span class="num">5</span> Notes <small>· describe la(s) actividad(es)</small></label>
         <textarea id="notes" rows="5" placeholder="Inicio: saludo y warm-up…  Desarrollo: …  Cierre: …"></textarea>
       </div>
+      <div class="fld">
+        <span class="lbl"><span class="num">6</span> Stage <small>· ¿hasta dónde llegaste hoy? (opcional)</small></span>
+        <div class="chips" id="stageChips" role="radiogroup" aria-label="Fase AOA"></div>
+      </div>
       <div class="btn-row">
         <button type="submit" class="btn-save" id="saveBtn">Guardar registro</button>
         <button type="button" class="btn-ghost" id="clearBtn">Limpiar</button>
@@ -290,6 +315,9 @@
         <input id="search" type="text" placeholder="Buscar por lección, actividad o nota…">
       </div>
       <button class="tbtn" id="csvBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>CSV</button>
+      <button class="tbtn" id="jsonExportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>Backup JSON</button>
+      <button class="tbtn" id="jsonImportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 5h16"/></svg>Restaurar backup</button>
+      <input type="file" id="jsonImportFile" accept=".json,application/json" hidden>
       <button class="tbtn" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4V9h16v9h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Imprimir</button>
     </div>
     <div class="filter-row" id="filterRow"></div>
@@ -315,7 +343,17 @@ const gById = id => GRADES.find(g=>g.id===id);
 const gLabel = id => id==='K' ? 'Kinder' : id+'°';
 const KEY = 'classlog.entries.v1';
 
-let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, toastTimer;
+const STAGES = [
+  {id:'READY', label:'READY', icon:'🚀', color:'#d97706'},
+  {id:'LEARN', label:'LEARN', icon:'📚', color:'#2563eb'},
+  {id:'PRACTICE', label:'PRACTICE', icon:'🤝', color:'#0d9488'},
+  {id:'PERFORM', label:'PERFORM', icon:'💪', color:'#7c3aed'},
+  {id:'SHOW', label:'SHOW', icon:'⭐', color:'#db2777'},
+  {id:'THINK', label:'THINK', icon:'💭', color:'#334155'},
+];
+const stById = id => STAGES.find(s=>s.id===id);
+
+let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, selectedStage = null, toastTimer, importState = null;
 
 /* ─────────── Utilidades ─────────── */
 const $ = id => document.getElementById(id);
@@ -352,6 +390,21 @@ function selectGrade(id){
   $('errGrade').hidden=true;
 }
 
+/* ─────────── Chips de fase AOA (Stage) ─────────── */
+const stageChipsEl = $('stageChips');
+STAGES.forEach(s=>{
+  const b=document.createElement('button');
+  b.type='button'; b.className='gchip'; b.dataset.s=s.id;
+  b.style.setProperty('--c',s.color); b.style.setProperty('--t','#ffffff');
+  b.innerHTML=`<i class="dot"></i>${s.icon} ${s.label}`;
+  b.addEventListener('click',()=> selectStage(selectedStage===s.id ? null : s.id));
+  stageChipsEl.appendChild(b);
+});
+function selectStage(id){
+  selectedStage=id;
+  stageChipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.toggle('sel', c.dataset.s===id));
+}
+
 /* ─────────── Render ─────────── */
 function renderFilter(){
   const counts={}; entries.forEach(e=>counts[e.grade]=(counts[e.grade]||0)+1);
@@ -366,12 +419,14 @@ $('filterRow').addEventListener('click', e=>{
 
 function cardHTML(e, idx){
   const g=gById(e.grade);
+  const st=e.stage ? stById(e.stage) : null;
   const notes = e.notes ? esc(e.notes).replace(/\n/g,'<br>') : '<em class="nonotes">Sin notas adicionales</em>';
   return `<article class="card" style="--gc:${g.color};--gi:${g.ink};animation-delay:${Math.min(idx*45,400)}ms" data-id="${e.id}">
     <span class="tape"></span>
     <div class="card-top">
       <span class="gbadge">${gLabel(e.grade)}</span>
       <span class="lesson-chip">📖 ${esc(e.lesson)}</span>
+      ${st?`<span class="stage-badge" style="--sc:${st.color}">${st.icon} ${st.label}</span>`:''}
       <div class="card-actions">
         <button class="ibtn" data-act="edit" title="Editar" aria-label="Editar">${IC.pencil}</button>
         <button class="ibtn" data-act="del" title="Borrar" aria-label="Borrar">${IC.trash}</button>
@@ -432,10 +487,12 @@ function startEdit(id){
   const e=entries.find(x=>x.id===id); if(!e) return;
   editingId=id;
   selectGrade(e.grade);
+  selectStage(e.stage||null);
   $('lesson').value=e.lesson; $('activity').value=e.activity;
   $('date').value=e.date; $('notes').value=e.notes||'';
   updateDateHint();
   $('editBanner').hidden=false;
+  $('importBanner').hidden=true; importState=null;
   $('saveBtn').textContent='Actualizar registro';
   $('planner').scrollIntoView({behavior:'smooth', block:'start'});
   $('lesson').focus();
@@ -444,8 +501,10 @@ function startEdit(id){
 function resetForm(keepGradeDate){
   editingId=null;
   if(!keepGradeDate){ selectedGrade=null; chipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.remove('sel')); $('planner').style.removeProperty('--accent'); $('date').value=todayISO(); }
+  selectStage(null);
   $('lesson').value=''; $('activity').value=''; $('notes').value='';
   $('editBanner').hidden=true; $('saveBtn').textContent='Guardar registro';
+  $('importBanner').hidden=true; importState=null;
   updateDateHint();
 }
 
@@ -462,10 +521,10 @@ $('form').addEventListener('submit', e=>{
 
   if(editingId){
     const i=entries.findIndex(x=>x.id===editingId);
-    entries[i]={...entries[i], grade:selectedGrade, lesson, activity, date, notes:$('notes').value.trim(), updatedAt:Date.now()};
+    entries[i]={...entries[i], grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(), updatedAt:Date.now()};
     toast('Registro actualizado ✓'); resetForm(false);
   }else{
-    entries.push({ id:uid(), grade:selectedGrade, lesson, activity, date, notes:$('notes').value.trim(), createdAt:Date.now() });
+    entries.push({ id:uid(), grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(), createdAt:Date.now() });
     toast('Registro guardado ✓'); resetForm(true); $('lesson').focus();
   }
   persist(); renderAll();
@@ -485,8 +544,8 @@ let deb; $('search').addEventListener('input', e=>{ clearTimeout(deb); deb=setTi
 
 $('csvBtn').addEventListener('click', ()=>{
   if(!entries.length){ toast('No hay registros para exportar'); return; }
-  const rows=[['Grade','Lesson','Activity','Date','Notes'],
-    ...[...entries].sort((a,b)=>a.date<b.date?-1:1).map(e=>[gLabel(e.grade), e.lesson, e.activity, e.date, e.notes||''])];
+  const rows=[['Grade','Lesson','Activity','Date','Notes','Stage'],
+    ...[...entries].sort((a,b)=>a.date<b.date?-1:1).map(e=>[gLabel(e.grade), e.lesson, e.activity, e.date, e.notes||'', e.stage?stById(e.stage).label:''])];
   const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
@@ -494,6 +553,99 @@ $('csvBtn').addEventListener('click', ()=>{
   toast('CSV descargado 📄');
 });
 $('printBtn').addEventListener('click', ()=>window.print());
+
+/* ─────────── Backup / restauración JSON (transferir entre dispositivos) ─────────── */
+$('jsonExportBtn').addEventListener('click', ()=>{
+  if(!entries.length){ toast('No hay registros para exportar'); return; }
+  const payload = { app:'glad-notes', version:1, exportedAt:new Date().toISOString(), entries };
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  a.download=`glad-notes-backup_${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  toast('Backup JSON descargado 📦');
+});
+
+$('jsonImportBtn').addEventListener('click', ()=> $('jsonImportFile').click());
+$('jsonImportFile').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file){ return; }
+  try{
+    const parsed = JSON.parse(await file.text());
+    const incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.entries) ? parsed.entries : null);
+    if(!incoming) throw new Error('formato');
+
+    const byId = new Map(entries.map(x=>[x.id,x]));
+    let added=0, updated=0, skipped=0;
+    incoming.forEach(inc=>{
+      if(!inc || !inc.id || !inc.grade || !inc.lesson || !inc.activity || !inc.date){ skipped++; return; }
+      const local = byId.get(inc.id);
+      if(!local){ byId.set(inc.id, inc); added++; }
+      else{
+        const incTime = inc.updatedAt||inc.createdAt||0, localTime = local.updatedAt||local.createdAt||0;
+        if(incTime > localTime){ byId.set(inc.id, inc); updated++; }
+      }
+    });
+    entries = Array.from(byId.values());
+    persist(); renderAll();
+    toast(`Backup restaurado ✓ ${added} nuevo(s), ${updated} actualizado(s)${skipped?`, ${skipped} omitido(s)`:''}`);
+  }catch(err){
+    toast('No pude leer ese archivo. ¿Es un backup JSON de Glad Notes? 🤔');
+  }
+  e.target.value='';
+});
+
+/* ─────────── Importar desde AoA Stage Weaver (HTML proyectable) ─────────── */
+$('importBtn').addEventListener('click', ()=> $('importFile').click());
+
+$('importFile').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file){ return; }
+  try{
+    const text = await file.text();
+    const titleMatch = text.match(/<title>([\s\S]*?)<\/title>/i);
+    let lessonTitle = titleMatch ? titleMatch[1].replace(/\s*[—–-]\s*AoA Stage Weaver\s*$/i,'').trim() : file.name.replace(/\.html?$/i,'').replace(/_/g,' ');
+    const dataMatch = text.match(/var\s+DATA\s*=\s*(\[[\s\S]*?\])\s*;\s*\(function/);
+    if(!dataMatch) throw new Error('no-data');
+    const data = JSON.parse(dataMatch[1]);
+    if(!Array.isArray(data) || !data.length) throw new Error('empty-data');
+    const gradeMatch = file.name.match(/Grado(K|\d+)/i);
+    const gradeId = gradeMatch ? gradeMatch[1].toUpperCase() : null;
+
+    importState = { lessonTitle, data, gradeId };
+    $('importTitle').textContent = lessonTitle;
+    $('importSkill').innerHTML = data.map((s,i)=>`<option value="${i}">${esc(s.skill)}</option>`).join('');
+    $('importBanner').hidden=false;
+    $('editBanner').hidden=true;
+  }catch(err){
+    toast('No pude leer ese archivo. ¿Es el HTML proyectable de AoA Stage Weaver? 🤔');
+  }
+  e.target.value='';
+});
+
+$('cancelImport').addEventListener('click', ()=>{ importState=null; $('importBanner').hidden=true; });
+
+$('applyImport').addEventListener('click', ()=>{
+  if(!importState) return;
+  const idx = Number($('importSkill').value);
+  const skillBlock = importState.data[idx];
+  const slides = skillBlock.slides || [];
+  const byLabel = id => slides.find(s=>s.label===id) || null;
+  const seg = s => { if(!s) return ''; const parts=[s.obj,s.material].filter(Boolean); return parts.join(' — '); };
+
+  const ready=seg(byLabel('READY'));
+  const desarrollo=['LEARN','PRACTICE','PERFORM','SHOW'].map(l=>seg(byLabel(l))).filter(Boolean).join('\n');
+  const think=seg(byLabel('THINK'));
+
+  const notes = `Inicio: ${ready}\n\nDesarrollo:\n${desarrollo}\n\nCierre: ${think}`;
+
+  $('lesson').value = importState.lessonTitle;
+  $('activity').value = `AoA Stage Weaver · 6 fases AOA (${skillBlock.skill})`;
+  $('notes').value = notes;
+  if(importState.gradeId && gById(importState.gradeId)) selectGrade(importState.gradeId);
+  ['lesson','activity','notes'].forEach(id=>$(id).classList.remove('invalid'));
+
+  importState=null; $('importBanner').hidden=true;
+  toast('Datos importados ✓ revisa y ajusta antes de guardar');
+  $('activity').focus();
+  $('planner').scrollIntoView({behavior:'smooth', block:'start'});
+});
 
 /* ─────────── Instalación PWA ─────────── */
 let deferredPrompt;
