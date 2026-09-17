@@ -1,4 +1,4 @@
-const CACHE = 'classlog-v7'; // versión nueva para forzar actualización de caché (Brújula: guía en vivo por fase)
+const CACHE = 'classlog-v11'; // versión nueva para forzar actualización de caché (Skill seleccionable en todos los registros + botón de import verde caña)
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon.png'];
 
 self.addEventListener('install', e => {

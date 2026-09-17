@@ -99,6 +99,10 @@
   .import-preview b{color:var(--ink)}
   .import-preview p{margin-bottom:8px}
   .import-preview p:last-child{margin-bottom:0}
+  .btn-apply-import{font-family:'Baloo 2'; font-weight:700; font-size:.95rem; cursor:pointer; width:100%;
+    color:#213612; background:#9ccc3c; border:none; border-radius:12px; padding:12px 20px; margin-top:2px;
+    box-shadow:0 5px 0 #6f9424; transition:transform .1s, box-shadow .1s}
+  .btn-apply-import:active{transform:translateY(4px); box-shadow:0 1px 0 #6f9424}
   .stage-badge{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:var(--sc,#334155); color:#fff;
     border-radius:999px; padding:3px 11px; display:inline-flex; align-items:center; gap:4px}
   .stage-pick{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:var(--sc,#9aa89f); color:#fff;
@@ -189,6 +193,8 @@
   .card-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:9px}
   .gbadge{font-family:'Baloo 2'; font-weight:700; font-size:.82rem; background:var(--gc); color:var(--gi);
     border-radius:999px; padding:3px 12px}
+  .skill-badge{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:#eef1ec; color:#3c4f46;
+    border:1.5px solid #c7d2c0; border-radius:999px; padding:3px 11px}
   .lesson-chip{font-size:.83rem; font-weight:600; color:#44554d; background:#f4f7ef;
     border:1.5px dashed #b9c4ae; border-radius:8px; padding:3px 10px}
   .card-actions{margin-left:auto; display:flex; gap:4px; opacity:.45; transition:opacity .2s}
@@ -279,6 +285,7 @@
       <span class="hand">paso a paso ✎</span>
     </div>
     <button type="button" class="btn-ghost import-btn" id="importBtn">📥 Importar desde AoA Stage Weaver</button>
+    <button type="button" class="btn-ghost import-btn" id="reopenImportBtn" hidden>🔁 Cambiar destreza (mismo archivo)</button>
     <input type="file" id="importFile" accept=".html,text/html" hidden>
     <div class="edit-banner" id="editBanner" hidden>
       <span>✏️ Estás editando un registro</span>
@@ -289,12 +296,13 @@
         <span>📥 Importado: <b id="importTitle"></b></span>
         <button type="button" class="link" id="cancelImport">cancelar</button>
       </div>
+      <p style="font-size:.82rem; color:#3c4f46; margin:-4px 0 2px">Revisa la vista previa y elige la destreza — nada se llena hasta que toques el botón de abajo 👇</p>
       <div class="row2">
         <label for="importSkill" style="font-weight:700; font-size:.85rem; white-space:nowrap">Destreza:</label>
         <select id="importSkill"></select>
-        <button type="button" class="btn-ghost" id="applyImport">Usar esta destreza →</button>
       </div>
       <div class="import-preview" id="importPreview"></div>
+      <button type="button" class="btn-apply-import" id="applyImport">⬇ Copiar a Lesson / Activity / Notes</button>
     </div>
     <form id="form" novalidate>
       <div class="fld">
@@ -303,24 +311,28 @@
         <p class="err" id="errGrade" hidden>Elige un grado para continuar</p>
       </div>
       <div class="fld">
-        <label class="lbl" for="lesson"><span class="num">2</span> Lesson <small>· lección</small></label>
+        <span class="lbl"><span class="num">2</span> Skill <small>· destreza (opcional)</small></span>
+        <div class="chips" id="skillChips" role="radiogroup" aria-label="Destreza"></div>
+      </div>
+      <div class="fld">
+        <label class="lbl" for="lesson"><span class="num">3</span> Lesson <small>· lección</small></label>
         <input id="lesson" type="text" autocomplete="off" placeholder="Unit 4 · Lesson 2: Animals">
       </div>
       <div class="fld">
-        <label class="lbl" for="activity"><span class="num">3</span> Activity <small>· actividad</small></label>
+        <label class="lbl" for="activity"><span class="num">4</span> Activity <small>· actividad</small></label>
         <input id="activity" type="text" autocomplete="off" placeholder="Flashcards + canción + juego en parejas">
       </div>
       <div class="fld">
-        <label class="lbl" for="date"><span class="num">4</span> Date <small>· fecha</small></label>
+        <label class="lbl" for="date"><span class="num">5</span> Date <small>· fecha</small></label>
         <input id="date" type="date">
         <span class="date-hint" id="dateHint"></span>
       </div>
       <div class="fld">
-        <label class="lbl" for="notes"><span class="num">5</span> Notes <small>· describe la(s) actividad(es)</small></label>
+        <label class="lbl" for="notes"><span class="num">6</span> Notes <small>· describe la(s) actividad(es)</small></label>
         <textarea id="notes" rows="5" placeholder="Inicio: saludo y warm-up…  Desarrollo: …  Cierre: …"></textarea>
       </div>
       <div class="fld">
-        <span class="lbl"><span class="num">6</span> Stage <small>· ¿hasta dónde llegaste hoy? (opcional)</small></span>
+        <span class="lbl"><span class="num">7</span> Stage <small>· ¿hasta dónde llegaste hoy? (opcional)</small></span>
         <div class="chips" id="stageChips" role="radiogroup" aria-label="Fase AOA"></div>
       </div>
       <div class="btn-row">
@@ -377,6 +389,7 @@ const GRADES = [
 const gById = id => GRADES.find(g=>g.id===id);
 const gLabel = id => id==='K' ? 'Kinder' : id+'°';
 const KEY = 'classlog.entries.v1';
+const IMPORT_KEY = 'classlog.lastImport.v1';
 
 const STAGES = [
   {id:'READY', label:'READY', icon:'🚀', color:'#d97706'},
@@ -388,8 +401,17 @@ const STAGES = [
 ];
 const stById = id => STAGES.find(s=>s.id===id);
 
-let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, selectedStage = null, toastTimer, importState = null;
-let pendingPhases = null, pendingSkill = null, activeEntryId = null;
+const SKILLS = [
+  {id:'Listening', label:'Listening', icon:'👂', color:'#0d9488'},
+  {id:'Reading', label:'Reading', icon:'📖', color:'#2563eb'},
+  {id:'Speaking', label:'Speaking', icon:'🗣️', color:'#d97706'},
+  {id:'Writing', label:'Writing', icon:'✍️', color:'#7c3aed'},
+  {id:'Mediation', label:'Mediation', icon:'🔄', color:'#db2777'},
+];
+const skById = id => SKILLS.find(s=>s.id===id);
+
+let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, selectedStage = null, selectedSkill = null, toastTimer, importState = null;
+let pendingPhases = null, activeEntryId = null;
 
 /* ─────────── Utilidades ─────────── */
 const $ = id => document.getElementById(id);
@@ -402,6 +424,9 @@ const fmtLong = d => parseISO(d).toLocaleDateString('es-ES',{weekday:'long',day:
 const fmtShort = ts => { const d=new Date(ts); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'}) + ' · ' + d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
 function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(entries)); }catch(e){} }
 function load(){ try{ entries = JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ entries=[]; } }
+function persistImport(){ try{ localStorage.setItem(IMPORT_KEY, JSON.stringify(importState)); }catch(e){} }
+function loadImport(){ try{ const raw=localStorage.getItem(IMPORT_KEY); importState = raw ? JSON.parse(raw) : null; }catch(e){ importState=null; } }
+function clearPersistedImport(){ try{ localStorage.removeItem(IMPORT_KEY); }catch(e){} }
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2400); }
 
 const IC = {
@@ -441,6 +466,21 @@ function selectStage(id){
   stageChipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.toggle('sel', c.dataset.s===id));
 }
 
+/* ─────────── Chips de destreza (Skill) ─────────── */
+const skillChipsEl = $('skillChips');
+SKILLS.forEach(s=>{
+  const b=document.createElement('button');
+  b.type='button'; b.className='gchip'; b.dataset.sk=s.id;
+  b.style.setProperty('--c',s.color); b.style.setProperty('--t','#ffffff');
+  b.innerHTML=`<i class="dot"></i>${s.icon} ${s.label}`;
+  b.addEventListener('click',()=> selectSkill(selectedSkill===s.id ? null : s.id));
+  skillChipsEl.appendChild(b);
+});
+function selectSkill(id){
+  selectedSkill=id;
+  skillChipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.toggle('sel', c.dataset.sk===id));
+}
+
 /* ─────────── Render ─────────── */
 function renderFilter(){
   const counts={}; entries.forEach(e=>counts[e.grade]=(counts[e.grade]||0)+1);
@@ -456,6 +496,7 @@ $('filterRow').addEventListener('click', e=>{
 function cardHTML(e, idx, activeId){
   const g=gById(e.grade);
   const st=e.stage ? stById(e.stage) : null;
+  const sk=e.skill ? skById(e.skill) : null;
   const notes = e.notes
     ? esc(e.notes).replace(/^(Inicio:|Desarrollo:|Cierre:)/gm,'<b>$1</b>').replace(/\n/g,'<br>')
     : '<em class="nonotes">Sin notas adicionales</em>';
@@ -463,6 +504,7 @@ function cardHTML(e, idx, activeId){
     <span class="tape"></span>
     <div class="card-top">
       <span class="gbadge">${gLabel(e.grade)}</span>
+      ${sk?`<span class="skill-badge">${sk.icon} ${sk.label}</span>`:''}
       <span class="lesson-chip">📖 ${esc(e.lesson)}</span>
       <select class="stage-pick" data-id="${e.id}" style="--sc:${st?st.color:'#9aa89f'}" title="Cambiar fase">
         <option value="">+ fase</option>
@@ -580,12 +622,13 @@ function startEdit(id){
   editingId=id;
   selectGrade(e.grade);
   selectStage(e.stage||null);
+  selectSkill(e.skill||null);
   $('lesson').value=e.lesson; $('activity').value=e.activity;
   $('date').value=e.date; $('notes').value=e.notes||'';
-  pendingPhases = e.phases || null; pendingSkill = e.skill || null;
+  pendingPhases = e.phases || null;
   updateDateHint();
   $('editBanner').hidden=false;
-  $('importBanner').hidden=true; importState=null;
+  $('importBanner').hidden=true;
   $('saveBtn').textContent='Actualizar registro';
   $('planner').scrollIntoView({behavior:'smooth', block:'start'});
   $('lesson').focus();
@@ -596,10 +639,11 @@ function resetForm(keepGradeDate){
   editingId=null;
   if(!keepGradeDate){ selectedGrade=null; chipsEl.querySelectorAll('.gchip').forEach(c=>c.classList.remove('sel')); $('planner').style.removeProperty('--accent'); $('date').value=todayISO(); }
   selectStage(null);
+  selectSkill(null);
   $('lesson').value=''; $('activity').value=''; $('notes').value='';
   $('editBanner').hidden=true; $('saveBtn').textContent='Guardar registro';
-  $('importBanner').hidden=true; importState=null;
-  pendingPhases=null; pendingSkill=null;
+  $('importBanner').hidden=true;
+  pendingPhases=null;
   updateDateHint();
 }
 
@@ -616,15 +660,14 @@ $('form').addEventListener('submit', e=>{
 
   if(editingId){
     const i=entries.findIndex(x=>x.id===editingId);
-    entries[i]={...entries[i], grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(),
+    entries[i]={...entries[i], grade:selectedGrade, stage:selectedStage, skill:selectedSkill, lesson, activity, date, notes:$('notes').value.trim(),
       phases: pendingPhases!==null ? pendingPhases : entries[i].phases,
-      skill: pendingPhases!==null ? pendingSkill : entries[i].skill,
       updatedAt:Date.now()};
     toast('Registro actualizado ✓'); setActiveEntry(editingId); resetForm(false);
   }else{
     const newId=uid();
-    entries.push({ id:newId, grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(),
-      phases: pendingPhases, skill: pendingSkill, createdAt:Date.now() });
+    entries.push({ id:newId, grade:selectedGrade, stage:selectedStage, skill:selectedSkill, lesson, activity, date, notes:$('notes').value.trim(),
+      phases: pendingPhases, createdAt:Date.now() });
     toast('Registro guardado ✓'); setActiveEntry(newId); resetForm(true); $('lesson').focus();
   }
   persist(); renderAll();
@@ -644,8 +687,8 @@ let deb; $('search').addEventListener('input', e=>{ clearTimeout(deb); deb=setTi
 
 $('csvBtn').addEventListener('click', ()=>{
   if(!entries.length){ toast('No hay registros para exportar'); return; }
-  const rows=[['Grade','Lesson','Activity','Date','Notes','Stage'],
-    ...[...entries].sort((a,b)=>a.date<b.date?-1:1).map(e=>[gLabel(e.grade), e.lesson, e.activity, e.date, e.notes||'', e.stage?stById(e.stage).label:''])];
+  const rows=[['Grade','Skill','Lesson','Activity','Date','Notes','Stage'],
+    ...[...entries].sort((a,b)=>a.date<b.date?-1:1).map(e=>[gLabel(e.grade), e.skill||'', e.lesson, e.activity, e.date, e.notes||'', e.stage?stById(e.stage).label:''])];
   const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
@@ -715,8 +758,18 @@ function renderImportPreview(){
   const parts = buildStageParts(importState.data[idx]);
   $('importPreview').innerHTML = stagePartsToPreviewHTML(parts);
 }
+function openImportBanner(){
+  if(!importState) return;
+  $('importTitle').textContent = importState.lessonTitle;
+  $('importSkill').innerHTML = importState.data.map((s,i)=>`<option value="${i}">${esc(s.skill)}</option>`).join('');
+  $('importBanner').hidden=false;
+  $('editBanner').hidden=true;
+  $('reopenImportBtn').hidden=false;
+  renderImportPreview();
+}
 
 $('importBtn').addEventListener('click', ()=> $('importFile').click());
+$('reopenImportBtn').addEventListener('click', openImportBanner);
 
 $('importFile').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file){ return; }
@@ -732,11 +785,8 @@ $('importFile').addEventListener('change', async e=>{
     const gradeId = gradeMatch ? gradeMatch[1].toUpperCase() : null;
 
     importState = { lessonTitle, data, gradeId };
-    $('importTitle').textContent = lessonTitle;
-    $('importSkill').innerHTML = data.map((s,i)=>`<option value="${i}">${esc(s.skill)}</option>`).join('');
-    $('importBanner').hidden=false;
-    $('editBanner').hidden=true;
-    renderImportPreview();
+    persistImport();
+    openImportBanner();
   }catch(err){
     toast('No pude leer ese archivo. ¿Es el HTML proyectable de AoA Stage Weaver? 🤔');
   }
@@ -744,7 +794,7 @@ $('importFile').addEventListener('change', async e=>{
 });
 
 $('importSkill').addEventListener('change', renderImportPreview);
-$('cancelImport').addEventListener('click', ()=>{ importState=null; $('importBanner').hidden=true; });
+$('cancelImport').addEventListener('click', ()=>{ importState=null; clearPersistedImport(); $('importBanner').hidden=true; $('reopenImportBtn').hidden=true; });
 
 $('applyImport').addEventListener('click', ()=>{
   if(!importState) return;
@@ -756,12 +806,12 @@ $('applyImport').addEventListener('click', ()=>{
   $('activity').value = `AoA Stage Weaver · 6 fases AOA (${skillBlock.skill})`;
   $('notes').value = notes;
   if(importState.gradeId && gById(importState.gradeId)) selectGrade(importState.gradeId);
+  if(skById(skillBlock.skill)) selectSkill(skillBlock.skill);
   ['lesson','activity','notes'].forEach(id=>$(id).classList.remove('invalid'));
 
   pendingPhases = skillBlock.slides || [];
-  pendingSkill = skillBlock.skill;
 
-  importState=null; $('importBanner').hidden=true;
+  $('importBanner').hidden=true;
   toast('Datos importados ✓ revisa y ajusta antes de guardar');
   $('activity').focus();
   $('planner').scrollIntoView({behavior:'smooth', block:'start'});
@@ -778,6 +828,8 @@ $('installBtn').addEventListener('click', async ()=>{
 
 /* ─────────── Init ─────────── */
 load();
+loadImport();
+if(importState) $('reopenImportBtn').hidden=false;
 $('date').value=todayISO();
 $('todayChalk').textContent = cap(new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}));
 updateDateHint();
