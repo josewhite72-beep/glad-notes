@@ -94,8 +94,19 @@
   .import-banner .row2{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
   .import-banner select{flex:1; min-width:140px; padding:8px 10px; border-radius:8px; border:2px solid var(--line); font-family:'Karla'; font-size:.92rem; background:#fffef9}
   .import-banner .btn-ghost{padding:8px 16px; font-size:.85rem; white-space:nowrap}
+  .import-preview{font-size:.86rem; line-height:1.55; color:#3c4f46; background:#fffef9; border:1px solid var(--line);
+    border-radius:8px; padding:10px 13px; max-height:230px; overflow-y:auto}
+  .import-preview b{color:var(--ink)}
+  .import-preview p{margin-bottom:8px}
+  .import-preview p:last-child{margin-bottom:0}
   .stage-badge{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:var(--sc,#334155); color:#fff;
     border-radius:999px; padding:3px 11px; display:inline-flex; align-items:center; gap:4px}
+  .stage-pick{font-family:'Baloo 2'; font-weight:700; font-size:.78rem; background:var(--sc,#9aa89f); color:#fff;
+    border:none; border-radius:999px; padding:4px 22px 4px 11px; cursor:pointer;
+    appearance:none; -webkit-appearance:none; -moz-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 6px center; background-size:11px}
+  .stage-pick:hover{filter:brightness(1.08)}
 
   .fld{margin-bottom:16px}
   .lbl{display:flex; align-items:center; gap:8px; font-weight:700; font-size:.82rem;
@@ -198,6 +209,22 @@
   .empty p{font-family:'Caveat'; font-size:1.7rem; color:var(--ink-soft)}
   .empty span{font-size:.92rem; color:#8b9a90}
 
+  /* ══════════ BRÚJULA ══════════ */
+  #compassPanel{margin-top:8px}
+  .card.active{box-shadow:0 0 0 3px var(--green), 0 10px 22px rgba(35,60,50,.16); transform:translateY(-2px)}
+  .compass-box{background:var(--paper); border:1px solid var(--line); border-left:6px solid var(--green);
+    border-radius:12px; padding:18px 20px; box-shadow:0 4px 14px rgba(35,60,50,.09)}
+  .compass-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; font-size:.95rem}
+  .compass-head b{font-size:1.02rem}
+  .compass-skill{color:var(--ink-soft); font-weight:600}
+  .compass-stage{display:inline-flex; align-items:center; gap:8px; background:var(--sc,#334155); color:#fff;
+    font-family:'Baloo 2'; font-weight:700; border-radius:999px; padding:6px 16px; margin-bottom:12px}
+  .compass-icon{font-size:1.25rem}
+  .compass-box p{margin-bottom:9px; line-height:1.55; font-size:.95rem; color:#3c4f46}
+  .compass-box p:last-child{margin-bottom:0}
+  .compass-box p b{color:var(--ink)}
+  .compass-empty{color:var(--ink-soft); font-family:'Caveat'; font-size:1.35rem; margin:0}
+
   .print-head{display:none}
   footer{margin:36px auto 40px; text-align:center; font-size:.82rem; color:var(--ink-soft)}
   footer b{font-family:'Baloo 2'}
@@ -209,7 +236,7 @@
 
   @media print{
     body{background:#fff}
-    .frame,.planner,.toolbar,.filter-row,.toast,footer,.card-actions,.tape{display:none!important}
+    .frame,.planner,.toolbar,.filter-row,.toast,footer,.card-actions,.tape,#compassPanel{display:none!important}
     main{display:block}
     .card{box-shadow:none; break-inside:avoid; margin-bottom:12px}
     .print-head{display:block; font-family:'Baloo 2'; font-size:1.3rem; margin-bottom:14px;
@@ -267,6 +294,7 @@
         <select id="importSkill"></select>
         <button type="button" class="btn-ghost" id="applyImport">Usar esta destreza →</button>
       </div>
+      <div class="import-preview" id="importPreview"></div>
     </div>
     <form id="form" novalidate>
       <div class="fld">
@@ -325,6 +353,13 @@
   </section>
 </main>
 
+<section class="wrap" id="compassPanel">
+  <div class="log-head">
+    <h2>🧭 Brújula de tu clase</h2>
+  </div>
+  <div class="compass-box" id="compassBody"></div>
+</section>
+
 <footer class="wrap"><b>GLAD Notes</b> · Tus registros se guardan en este dispositivo y la app funciona sin conexión ✏️</footer>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -354,6 +389,7 @@ const STAGES = [
 const stById = id => STAGES.find(s=>s.id===id);
 
 let entries = [], filter = 'all', query = '', editingId = null, selectedGrade = null, selectedStage = null, toastTimer, importState = null;
+let pendingPhases = null, pendingSkill = null, activeEntryId = null;
 
 /* ─────────── Utilidades ─────────── */
 const $ = id => document.getElementById(id);
@@ -417,16 +453,21 @@ $('filterRow').addEventListener('click', e=>{
   filter=b.dataset.f; renderFilter(); renderList();
 });
 
-function cardHTML(e, idx){
+function cardHTML(e, idx, activeId){
   const g=gById(e.grade);
   const st=e.stage ? stById(e.stage) : null;
-  const notes = e.notes ? esc(e.notes).replace(/\n/g,'<br>') : '<em class="nonotes">Sin notas adicionales</em>';
-  return `<article class="card" style="--gc:${g.color};--gi:${g.ink};animation-delay:${Math.min(idx*45,400)}ms" data-id="${e.id}">
+  const notes = e.notes
+    ? esc(e.notes).replace(/^(Inicio:|Desarrollo:|Cierre:)/gm,'<b>$1</b>').replace(/\n/g,'<br>')
+    : '<em class="nonotes">Sin notas adicionales</em>';
+  return `<article class="card${e.id===activeId?' active':''}" style="--gc:${g.color};--gi:${g.ink};animation-delay:${Math.min(idx*45,400)}ms" data-id="${e.id}">
     <span class="tape"></span>
     <div class="card-top">
       <span class="gbadge">${gLabel(e.grade)}</span>
       <span class="lesson-chip">📖 ${esc(e.lesson)}</span>
-      ${st?`<span class="stage-badge" style="--sc:${st.color}">${st.icon} ${st.label}</span>`:''}
+      <select class="stage-pick" data-id="${e.id}" style="--sc:${st?st.color:'#9aa89f'}" title="Cambiar fase">
+        <option value="">+ fase</option>
+        ${STAGES.map(s=>`<option value="${s.id}" ${e.stage===s.id?'selected':''}>${s.icon} ${s.label}</option>`).join('')}
+      </select>
       <div class="card-actions">
         <button class="ibtn" data-act="edit" title="Editar" aria-label="Editar">${IC.pencil}</button>
         <button class="ibtn" data-act="del" title="Borrar" aria-label="Borrar">${IC.trash}</button>
@@ -458,29 +499,80 @@ function renderList(){
     return;
   }
   let html='', last=null, idx=0;
+  const activeId = pickActiveEntry()?.id;
   for(const e of items){
     if(e.date!==last){ if(last!==null) html+='</div>'; html+=`<div class="group"><div class="group-h"><span>${cap(fmtLong(e.date))}</span><i></i></div><div class="group-cards">`; last=e.date; }
-    html+=cardHTML(e, idx++);
+    html+=cardHTML(e, idx++, activeId);
   }
   $('list').innerHTML=html+'</div></div>';
 }
 
-function renderAll(){ renderFilter(); renderList(); }
+function renderAll(){ renderFilter(); renderList(); renderCompass(); }
+
+/* ─────────── Brújula: qué clase/fase está activa ─────────── */
+function pickActiveEntry(){
+  if(activeEntryId){ const found=entries.find(e=>e.id===activeEntryId); if(found) return found; }
+  if(!entries.length) return null;
+  return [...entries].sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt))[0];
+}
+function setActiveEntry(id){
+  activeEntryId=id;
+  document.querySelectorAll('#list .card.active').forEach(c=>c.classList.remove('active'));
+  const card=document.querySelector(`#list .card[data-id="${id}"]`);
+  if(card) card.classList.add('active');
+  renderCompass();
+}
+function renderCompass(){
+  const box=$('compassBody');
+  const entry=pickActiveEntry();
+  if(!entry){ box.innerHTML=`<p class="compass-empty">Aún no hay registros — guarda tu primera clase para activar la brújula ✎</p>`; return; }
+  const g=gById(entry.grade);
+  let head=`<div class="compass-head"><span class="gbadge" style="--gc:${g.color};--gi:#fff">${gLabel(entry.grade)}</span> <b>${esc(entry.lesson)}</b>${entry.skill?` <span class="compass-skill">· ${esc(entry.skill)}</span>`:''}</div>`;
+  if(!entry.phases || !entry.phases.length){
+    box.innerHTML=head+`<p class="compass-empty">Esta clase no tiene guion de fases importado — usa 📥 Importar desde AoA Stage Weaver para ver aquí el paso a paso.</p>`;
+    return;
+  }
+  if(!entry.stage){
+    box.innerHTML=head+`<p class="compass-empty">Marca una fase (chip "+ fase" en la tarjeta) para ver aquí qué toca hacer ahora.</p>`;
+    return;
+  }
+  const slide=entry.phases.find(s=>s.label===entry.stage);
+  const st=stById(entry.stage);
+  if(!slide){ box.innerHTML=head+`<p class="compass-empty">No encontré el detalle de esa fase.</p>`; return; }
+  box.innerHTML=head+
+    `<div class="compass-stage" style="--sc:${slide.color||(st?st.color:'#334155')}"><span class="compass-icon">${slide.gesto||(st?st.icon:'')}</span><span>${st?st.label:entry.stage}</span></div>`+
+    `<p><b>Objetivo:</b> ${esc(slide.obj||'')}</p>`+
+    (slide.material?`<p><b>Material:</b> ${esc(slide.material)}</p>`:'');
+}
 
 /* ─────────── Acciones sobre tarjetas ─────────── */
 $('list').addEventListener('click', e=>{
-  const btn=e.target.closest('[data-act]'); if(!btn) return;
-  const card=btn.closest('.card'), id=card.dataset.id;
-  if(btn.dataset.act==='edit'){ startEdit(id); }
-  else{
+  if(e.target.closest('.stage-pick')) return;
+  const card=e.target.closest('.card'); if(!card) return;
+  const id=card.dataset.id;
+  const btn=e.target.closest('[data-act]');
+  if(btn){
+    if(btn.dataset.act==='edit'){ startEdit(id); return; }
     if(btn.dataset.armed){
       card.classList.add('out');
-      setTimeout(()=>{ entries=entries.filter(x=>x.id!==id); persist(); renderAll(); toast('Registro eliminado 🗑'); },230);
+      setTimeout(()=>{ entries=entries.filter(x=>x.id!==id); if(activeEntryId===id) activeEntryId=null; persist(); renderAll(); toast('Registro eliminado 🗑'); },230);
     }else{
       btn.dataset.armed='1'; btn.classList.add('armed'); btn.textContent='¿Seguro?';
       setTimeout(()=>{ if(document.contains(btn)){ delete btn.dataset.armed; btn.classList.remove('armed'); btn.innerHTML=IC.trash; } },2200);
     }
+    return;
   }
+  setActiveEntry(id);
+});
+$('list').addEventListener('change', e=>{
+  const sel=e.target.closest('.stage-pick'); if(!sel) return;
+  const id=sel.dataset.id, entry=entries.find(x=>x.id===id); if(!entry) return;
+  entry.stage = sel.value || null;
+  entry.updatedAt = Date.now();
+  persist();
+  sel.style.setProperty('--sc', entry.stage ? stById(entry.stage).color : '#9aa89f');
+  toast(entry.stage ? `Fase actualizada: ${stById(entry.stage).label} ✓` : 'Fase quitada');
+  setActiveEntry(id);
 });
 
 function startEdit(id){
@@ -490,12 +582,14 @@ function startEdit(id){
   selectStage(e.stage||null);
   $('lesson').value=e.lesson; $('activity').value=e.activity;
   $('date').value=e.date; $('notes').value=e.notes||'';
+  pendingPhases = e.phases || null; pendingSkill = e.skill || null;
   updateDateHint();
   $('editBanner').hidden=false;
   $('importBanner').hidden=true; importState=null;
   $('saveBtn').textContent='Actualizar registro';
   $('planner').scrollIntoView({behavior:'smooth', block:'start'});
   $('lesson').focus();
+  setActiveEntry(id);
 }
 
 function resetForm(keepGradeDate){
@@ -505,6 +599,7 @@ function resetForm(keepGradeDate){
   $('lesson').value=''; $('activity').value=''; $('notes').value='';
   $('editBanner').hidden=true; $('saveBtn').textContent='Guardar registro';
   $('importBanner').hidden=true; importState=null;
+  pendingPhases=null; pendingSkill=null;
   updateDateHint();
 }
 
@@ -521,11 +616,16 @@ $('form').addEventListener('submit', e=>{
 
   if(editingId){
     const i=entries.findIndex(x=>x.id===editingId);
-    entries[i]={...entries[i], grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(), updatedAt:Date.now()};
-    toast('Registro actualizado ✓'); resetForm(false);
+    entries[i]={...entries[i], grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(),
+      phases: pendingPhases!==null ? pendingPhases : entries[i].phases,
+      skill: pendingPhases!==null ? pendingSkill : entries[i].skill,
+      updatedAt:Date.now()};
+    toast('Registro actualizado ✓'); setActiveEntry(editingId); resetForm(false);
   }else{
-    entries.push({ id:uid(), grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(), createdAt:Date.now() });
-    toast('Registro guardado ✓'); resetForm(true); $('lesson').focus();
+    const newId=uid();
+    entries.push({ id:newId, grade:selectedGrade, stage:selectedStage, lesson, activity, date, notes:$('notes').value.trim(),
+      phases: pendingPhases, skill: pendingSkill, createdAt:Date.now() });
+    toast('Registro guardado ✓'); setActiveEntry(newId); resetForm(true); $('lesson').focus();
   }
   persist(); renderAll();
   const b=$('saveBtn'); b.classList.add('ok'); setTimeout(()=>b.classList.remove('ok'),900);
@@ -593,6 +693,29 @@ $('jsonImportFile').addEventListener('change', async e=>{
 });
 
 /* ─────────── Importar desde AoA Stage Weaver (HTML proyectable) ─────────── */
+function buildStageParts(skillBlock){
+  const slides = skillBlock.slides || [];
+  const byLabel = id => slides.find(s=>s.label===id) || null;
+  const seg = s => { if(!s) return ''; const parts=[s.obj,s.material].filter(Boolean); return parts.join(' — '); };
+  return {
+    ready: seg(byLabel('READY')),
+    desarrollo: ['LEARN','PRACTICE','PERFORM','SHOW'].map(l=>seg(byLabel(l))).filter(Boolean).join('\n'),
+    think: seg(byLabel('THINK'))
+  };
+}
+function stagePartsToNotes(p){ return `Inicio: ${p.ready}\n\nDesarrollo:\n${p.desarrollo}\n\nCierre: ${p.think}`; }
+function stagePartsToPreviewHTML(p){
+  return `<p><b>Inicio:</b> ${esc(p.ready)}</p>`+
+         `<p><b>Desarrollo:</b><br>${esc(p.desarrollo).replace(/\n/g,'<br>')}</p>`+
+         `<p><b>Cierre:</b> ${esc(p.think)}</p>`;
+}
+function renderImportPreview(){
+  if(!importState) return;
+  const idx = Number($('importSkill').value);
+  const parts = buildStageParts(importState.data[idx]);
+  $('importPreview').innerHTML = stagePartsToPreviewHTML(parts);
+}
+
 $('importBtn').addEventListener('click', ()=> $('importFile').click());
 
 $('importFile').addEventListener('change', async e=>{
@@ -613,33 +736,30 @@ $('importFile').addEventListener('change', async e=>{
     $('importSkill').innerHTML = data.map((s,i)=>`<option value="${i}">${esc(s.skill)}</option>`).join('');
     $('importBanner').hidden=false;
     $('editBanner').hidden=true;
+    renderImportPreview();
   }catch(err){
     toast('No pude leer ese archivo. ¿Es el HTML proyectable de AoA Stage Weaver? 🤔');
   }
   e.target.value='';
 });
 
+$('importSkill').addEventListener('change', renderImportPreview);
 $('cancelImport').addEventListener('click', ()=>{ importState=null; $('importBanner').hidden=true; });
 
 $('applyImport').addEventListener('click', ()=>{
   if(!importState) return;
   const idx = Number($('importSkill').value);
   const skillBlock = importState.data[idx];
-  const slides = skillBlock.slides || [];
-  const byLabel = id => slides.find(s=>s.label===id) || null;
-  const seg = s => { if(!s) return ''; const parts=[s.obj,s.material].filter(Boolean); return parts.join(' — '); };
-
-  const ready=seg(byLabel('READY'));
-  const desarrollo=['LEARN','PRACTICE','PERFORM','SHOW'].map(l=>seg(byLabel(l))).filter(Boolean).join('\n');
-  const think=seg(byLabel('THINK'));
-
-  const notes = `Inicio: ${ready}\n\nDesarrollo:\n${desarrollo}\n\nCierre: ${think}`;
+  const notes = stagePartsToNotes(buildStageParts(skillBlock));
 
   $('lesson').value = importState.lessonTitle;
   $('activity').value = `AoA Stage Weaver · 6 fases AOA (${skillBlock.skill})`;
   $('notes').value = notes;
   if(importState.gradeId && gById(importState.gradeId)) selectGrade(importState.gradeId);
   ['lesson','activity','notes'].forEach(id=>$(id).classList.remove('invalid'));
+
+  pendingPhases = skillBlock.slides || [];
+  pendingSkill = skillBlock.skill;
 
   importState=null; $('importBanner').hidden=true;
   toast('Datos importados ✓ revisa y ajusta antes de guardar');

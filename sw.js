@@ -1,4 +1,4 @@
-const CACHE = 'classlog-v4'; // versión nueva para forzar actualización de caché (backup/restauración JSON entre dispositivos)
+const CACHE = 'classlog-v7'; // versión nueva para forzar actualización de caché (Brújula: guía en vivo por fase)
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon.png'];
 
 self.addEventListener('install', e => {
